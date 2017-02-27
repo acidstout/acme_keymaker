@@ -1,5 +1,4 @@
 <?php
-
 /*************************************************************
 *
 *	ACME Products Keymaker
@@ -11,18 +10,28 @@
 *
 *************************************************************/
 
-
 // Configuration
-$xorCrypt        = new xorCrypt();
-$xorCrypt->setKey('Secret');
-$prod_title      = 'ACME Products Keymaker';
-$prod_about      = 'Das sch&ouml;ne System';
-$prod_link       = 'http://www.das-schoene-system.de';
-$lic_type_txt    = array( 0 => 'Evaluation', 1 => 'Basic', 2 => 'Extended', 3 => 'Premium', 4 => 'Corporate', 99 => 'Internal');
-$lic_num_random  = false;
-$lic_sep         = ';';
+//----------------------------------------------------
+$xorCrypt        = new xorCrypt();			// Create a new XOR object
+$xorCrypt->setKey('Secret');				// Set the key which is used to encrypt/decrypt the license
+$prod_title      = 'ACME Products Keymaker';		// Name of the keymaker. Change at will.
+$prod_about      = 'Das sch&ouml;ne System';		// Company of the product or of the keymaker. You decide.
+$prod_link       = 'http://www.das-schoene-system.de';	// See above.
+$lic_num_random  = false;				// By default generate a first license number if none is given and keep that during license generation.
+$lic_sep         = ';';					// Separater character. Used to separate base64 encoded strings from each other in the encrypted payload.
+$lic_type_txt    = array(
+			0 => 'Evaluation',
+			1 => 'Basic',
+			2 => 'Extended',
+			3 => 'Premium',
+			4 => 'Corporate',
+			99 => 'Internal');		// License types. Extend at will.
+
+//----------------------------------------------------
 
 
+
+// Check POSTs
 if (isset($_POST['lic_do']) && isset($_POST['lic_txt']) && !empty($_POST['lic_txt'])) {
 	// Generate a license from the provided information.
 	$lic_txt          = $_POST['lic_txt']; 
@@ -55,9 +64,9 @@ if (isset($_POST['lic_do']) && isset($_POST['lic_txt']) && !empty($_POST['lic_tx
 		$lic_info   = $_POST['lic_info'];
 	} else {
 		// Fallback if nothing was provided (e.g. keymaker was just called by a GET request).
-		$lic_info = "MSxajxWNuNFpkxP5XeYhk/gLD6l5Z62zo5UkoV5aDJr3MtYx7L4hswanGe6RHUt7nSBCAC7PVUAI76OgjT4Smw3Z8DER85Cdh7xksuiHDNo5vGQbZvgbgSsXPajzoAuM4lwNdqNAarog1X7tenbUsA==;"
-		          . "dMWam0+GoyfQZwS7VosrfYwwLTXaXYJoMScIJqIUAEYiWLeTTSTDY/xB40MaoqZODsGo69kALgdFtszgM/pOAA==;"
-		          . "FP4gj9eZPjY2WZGeFqyilHI6nvrrVdaifxlFVng5WjM=;"
+		$lic_info = "MSxajxWNuNFpkxP5XeYhk/gLD6l5Z62zo5UkoV5aDJr3MtYx7L4hswanGe6RHUt7nSBCAC7PVUAI76OgjT4Smw3Z8DER85Cdh7xksuiHDNo5vGQbZvgbgSsXPajzoAuM4lwNdqNAarog1X7tenbUsA==" . $lic_sep
+		          . "dMWam0+GoyfQZwS7VosrfYwwLTXaXYJoMScIJqIUAEYiWLeTTSTDY/xB40MaoqZODsGo69kALgdFtszgM/pOAA==" . $lic_sep
+		          . "FP4gj9eZPjY2WZGeFqyilHI6nvrrVdaifxlFVng5WjM=" . $lic_sep
 		          . "pQ3hq280FCGcQ+P2NnerR53w2ws38Nu36WZGc+FE3zU=";
 	}
 	
@@ -88,6 +97,7 @@ if (isset($_POST['lic_do']) && isset($_POST['lic_txt']) && !empty($_POST['lic_tx
 }
 
 
+// Save license into temporary file and offer download.
 if ((isset($_POST['lic_save'])) && (isset($_POST['lic_info'])) && (!empty($_POST['lic_info']))) {
 	$lic_info = $_POST['lic_info'];
 
@@ -122,6 +132,11 @@ if ((isset($_POST['lic_save'])) && (isset($_POST['lic_info'])) && (!empty($_POST
 	}
 }
 
+
+
+//
+// HTML template
+//
 ?>
 <!DOCTYPE html>
 <html>
@@ -303,6 +318,11 @@ if ((isset($_POST['lic_save'])) && (isset($_POST['lic_info'])) && (!empty($_POST
 </html>
 <?php
 
+
+
+//
+// Some functions and classes needed to provide functionality.
+//
 
 /**
  * Simply XOR encryption/decryption class
