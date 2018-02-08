@@ -10,37 +10,187 @@
 *
 *************************************************************/
 
+//----------------------------------------------------
 // Configuration
 //----------------------------------------------------
-$xorCrypt        = new xorCrypt();			// Create a new XOR object
-$xorCrypt->setKey('Secret');				// Set the key which is used to encrypt/decrypt the license
-$prod_title      = 'ACME Products Keymaker';		// Name of the keymaker. Change at will.
-$prod_about      = 'Das sch&ouml;ne System';		// Company of the product or of the keymaker. You decide.
-$prod_link       = 'http://www.das-schoene-system.de';	// See above.
-$lic_num_random  = false;				// By default generate a first license number if none is given and keep that during license generation.
-$lic_sep         = ';';					// Separater character. Used to separate base64 encoded strings from each other in the encrypted payload.
+$prod_title      = 'ACME Products Keymaker';					// Name of the keymaker. Change at will.
+$prod_about      = 'Where children sing songs of binary bliss'; // Company of the product or of the keymaker. You decide.
+$prod_link       = 'https://rekow.ch';							// See above.
+$lic_num_random  = false;										// By default generate a first license number if none is given and keep that during license generation.
+$lic_sep         = ';';											// Separater character. Used to separate base64 encoded strings from each other in the encrypted payload.
 $lic_type_txt    = array(
-			0 => 'Evaluation',
-			1 => 'Basic',
-			2 => 'Extended',
-			3 => 'Premium',
-			4 => 'Corporate',
-			99 => 'Internal');		// License types. Extend at will.
-
+		0 => 'Evaluation',
+		1 => 'Basic',
+		2 => 'Extended',
+		3 => 'Premium',
+		4 => 'Corporate',
+		99 => 'Internal');										// License types. Extend at will.
 //----------------------------------------------------
 
+		
 
+/**
+ * Simply XOR encryption/decryption class
+ *
+ * Encrypted strings will get base64 encoded in order to not break stuff.
+ *
+ * Uses random initialization vector.
+ *
+ */
+class xorCrypt {
+	private $password = NULL;
+
+	/**
+	 * Sets password to use for encryption/decryption
+	 *
+	 * @param string $password
+	 */
+	public function __construct($password) {
+		$this->password = $password;
+		return $this;
+	}
+	
+	
+	/**
+	 * Generates a random Initialization vector
+	 *
+	 * @param integer $length
+	 * @return string $iv
+	 */
+	private function _getRandomIV($length) {
+		$iv = '';
+		while($length-- > 0) {
+			$iv .= chr(mt_rand() & 0xff);
+		}
+		return $iv;
+	}
+	
+	
+	/**
+	 * Encrypts and encodes given payload and returns result.
+	 *
+	 * @param string $plain_text
+	 * @param integer $iv_length - langth of IV
+	 * @return string $enc_text - base64 encoded and XOR encrypted payload
+	 */
+	public function encrypt($plain_text, $iv_length = 16) {
+		$plain_text .= "\x13";
+		$n = strlen($plain_text);
+		
+		if ($n % 16) {
+			$plain_text .= str_repeat("\0", 16 - ($n % 16));
+			$i = 0;
+			$enc_text = $this->_getRandomIV($iv_length);
+			$iv = substr($this->password ^ $enc_text, 0, 512);
+			
+			while ($i < $n) {
+				$block = substr($plain_text, $i, 16) ^ pack('H*', sha1($iv));
+				$enc_text .= $block;
+				$iv = substr($block . $iv, 0, 512) ^ $this->password;
+				$i += 16;
+			}
+			
+			return base64_encode($enc_text);
+		}
+		
+		return false;
+	}
+	
+	/**
+	 * Decodes and decrypts given payload and returns result.
+	 *
+	 * @param string $enc_text - base64 encoded and XOR encrypted payload
+	 * @param integer $iv_length - length of IV
+	 * @return string $plain_text - decrypted and decoded
+	 */
+	public function decrypt($enc_text, $iv_length = 16) {
+		$enc_text = base64_decode($enc_text);
+		$plain_text = '';
+		$iv = substr($this->password ^ substr($enc_text, 0, $iv_length), 0, 512);
+		$n = strlen($enc_text);
+		$i = $iv_length;
+		
+		while ($i < $n) {
+			$block = substr($enc_text, $i, 16);
+			$plain_text .= $block ^ pack('H*', sha1($iv));
+			$iv = substr($block . $iv, 0, 512) ^ $this->password;
+			$i += 16;
+		}
+		
+		return stripslashes(preg_replace('/\\x13\\x00*$/', '', $plain_text));
+	}
+}
+
+
+/**
+ * Generate a random UUID.
+ *
+ * @return string $uuid
+ */
+function uuid() {
+	// The field names refer to RFC 4122 section 4.1.2
+	$uuid = sprintf('%04x%04x-%04x-%03x4-%04x-%04x%04x%04x',
+			mt_rand(0, 65535), mt_rand(0, 65535), // 32 bits for "time_low"
+			mt_rand(0, 65535), // 16 bits for "time_mid"
+			mt_rand(0, 4095),  // 12 bits before the 0100 of (version) 4 for "time_hi_and_version"
+			bindec(substr_replace(sprintf('%016b', mt_rand(0, 65535)), '01', 6, 2)),
+			// 8 bits, the last two of which (positions 6 and 7) are 01, for "clk_seq_hi_res"
+			// (hence, the 2nd hex digit after the 3rd hyphen can only be 1, 5, 9 or d)
+			// 8 bits for "clk_seq_low"
+			mt_rand(0, 65535), mt_rand(0, 65535), mt_rand(0, 65535) // 48 bits for "node"
+			);
+	
+	return strtoupper($uuid);
+}
+
+
+/**
+ * Checks if an encrypted payload contains valid license information.
+ *
+ * @param string $lines
+ * @return array $license
+ */
+function checkLicense($xorCrypt, $lines) {
+	$license = array(
+			'info' => '',
+			'guid' => '',
+			'type' => '0',
+			'num' => '0'
+	);
+	
+	if (isset($lines) && !empty($lines)) {
+		if (count($lines) >= 4) {
+			$license['info'] = $lines[0];
+			$license['guid'] = $lines[1];
+			$license['type'] = $lines[2];
+			$license['num']  = $lines[3];
+		}
+	}
+	
+	if (!empty($license['info']) && !empty($license['guid']) && !empty($license['type']) && !empty($license['num'])) {
+		$license['info'] = $xorCrypt->decrypt($license['info']);
+		$license['guid'] = $xorCrypt->decrypt($license['guid']);
+		$license['type'] = $xorCrypt->decrypt($license['type']);
+		$license['num']  = $xorCrypt->decrypt($license['num']);
+	}
+	
+	return $license;
+}// END: checkLicense()
+
+
+// Create a new XOR object with the key "Secret".
+$xorCrypt = new xorCrypt('Secret');
 
 // Check POSTs
 if (isset($_POST['lic_do']) && isset($_POST['lic_txt']) && !empty($_POST['lic_txt'])) {
 	// Generate a license from the provided information.
-	$lic_txt          = $_POST['lic_txt']; 
-	$lic_type         = $_POST['lic_type']; 
-	$lic_machines     = $_POST['lic_machines'];
+	$lic_txt = $_POST['lic_txt']; 
+	$lic_type = $_POST['lic_type']; 
+	$lic_machines = $_POST['lic_machines'];
 	
 	if (isset($_POST['lic_num_random']) && !empty($_POST['lic_num_random'])) {
 		// Generate a random license number.
-		$lic_num        = uuid();
+		$lic_num = uuid();
 		$lic_num_random = true;
 	} else {
 		if (isset($_POST['lic_num']) && !empty($_POST['lic_num'])) {
@@ -48,26 +198,26 @@ if (isset($_POST['lic_do']) && isset($_POST['lic_txt']) && !empty($_POST['lic_tx
 			$lic_num = $_POST['lic_num'];
 		} else {
 			// Generate a unique license number from the provided license information.
-			$md5     = strtoupper(md5($lic_txt));
+			$md5 = strtoupper(md5($lic_txt));
 			$lic_num = substr($md5, 0, 8) . '-' . substr($md5, 8, 4) . '-' . substr($md5, 12, 4) . '-' . substr($md5, 16, 4) . '-' . substr($md5, 20, 12);
 		}
 	}
 	
 	// Encrypt license information using simple XOR and Base64 encode the result.
-	$enc_lic_txt      = $xorCrypt->encrypt($lic_txt);
-	$enc_lic_type     = $xorCrypt->encrypt($lic_type);
+	$enc_lic_txt = $xorCrypt->encrypt($lic_txt);
+	$enc_lic_type = $xorCrypt->encrypt($lic_type);
 	$enc_lic_machines = $xorCrypt->encrypt($lic_machines);
-	$enc_lic_num      = $xorCrypt->encrypt($lic_num);
+	$enc_lic_num = $xorCrypt->encrypt($lic_num);
 } else {
+	// Fallback if nothing was provided (e.g. keymaker was just called by a GET request).
+	$lic_info = "MSxajxWNuNFpkxP5XeYhk/gLD6l5Z62zo5UkoV5aDJr3MtYx7L4hswanGe6RHUt7nSBCAC7PVUAI76OgjT4Smw3Z8DER85Cdh7xksuiHDNo5vGQbZvgbgSsXPajzoAuM4lwNdqNAarog1X7tenbUsA==" . $lic_sep
+		. "dMWam0+GoyfQZwS7VosrfYwwLTXaXYJoMScIJqIUAEYiWLeTTSTDY/xB40MaoqZODsGo69kALgdFtszgM/pOAA==" . $lic_sep
+		. "FP4gj9eZPjY2WZGeFqyilHI6nvrrVdaifxlFVng5WjM=" . $lic_sep
+		. "pQ3hq280FCGcQ+P2NnerR53w2ws38Nu36WZGc+FE3zU=";
+	
 	// Check if encrypted license has been provided.
 	if (isset($_POST['lic_info']) && isset($_POST['lic_re'])) {
-		$lic_info   = $_POST['lic_info'];
-	} else {
-		// Fallback if nothing was provided (e.g. keymaker was just called by a GET request).
-		$lic_info = "MSxajxWNuNFpkxP5XeYhk/gLD6l5Z62zo5UkoV5aDJr3MtYx7L4hswanGe6RHUt7nSBCAC7PVUAI76OgjT4Smw3Z8DER85Cdh7xksuiHDNo5vGQbZvgbgSsXPajzoAuM4lwNdqNAarog1X7tenbUsA==" . $lic_sep
-		          . "dMWam0+GoyfQZwS7VosrfYwwLTXaXYJoMScIJqIUAEYiWLeTTSTDY/xB40MaoqZODsGo69kALgdFtszgM/pOAA==" . $lic_sep
-		          . "FP4gj9eZPjY2WZGeFqyilHI6nvrrVdaifxlFVng5WjM=" . $lic_sep
-		          . "pQ3hq280FCGcQ+P2NnerR53w2ws38Nu36WZGc+FE3zU=";
+		$lic_info = $_POST['lic_info'];
 	}
 	
 	$lic_result = array();
@@ -75,7 +225,6 @@ if (isset($_POST['lic_do']) && isset($_POST['lic_txt']) && !empty($_POST['lic_tx
 	
 	// Combine parts into array.
 	for ($i = 0; $i <= strlen($lic_info); $i++) {
-		
 		if (isset($lic_info[$i])) {
 			if ($lic_info[$i] != $lic_sep) {
 				$s .= $lic_info[$i];
@@ -89,10 +238,10 @@ if (isset($_POST['lic_do']) && isset($_POST['lic_txt']) && !empty($_POST['lic_tx
 	$lic_result[] = $s;
 
 	// Decrypt array and split result into readable parts.
-	$license      = checkLicense($lic_result);
-	$lic_num      = $license['guid'];
-	$lic_txt      = $license['info'];
-	$lic_type     = $license['type'];
+	$license = checkLicense($xorCrypt, $lic_result);
+	$lic_num = $license['guid'];
+	$lic_txt = $license['info'];
+	$lic_type = $license['type'];
 	$lic_machines = $license['num'];
 }
 
@@ -137,8 +286,7 @@ if ((isset($_POST['lic_save'])) && (isset($_POST['lic_info'])) && (!empty($_POST
 //
 // HTML template
 //
-?>
-<!DOCTYPE html>
+?><!DOCTYPE html>
 <html>
 	<head>
 		<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
@@ -256,12 +404,12 @@ if ((isset($_POST['lic_save'])) && (isset($_POST['lic_info'])) && (!empty($_POST
 								<select name="lic_type" class="alignleft" title="Type of license.">
 								<?php
 								foreach ($lic_type_txt as $key => $value) {
+									$selected = '';
+									
 									if ($key == $lic_type) {
 										$selected = ' selected';
-									} else {
-										$selected = '';
 									}
-									
+
 									print '<option value="' . $key . '"' . $selected . '>' . $value . '</option>';
 								}?>
 								</select>
@@ -273,29 +421,28 @@ if ((isset($_POST['lic_save'])) && (isset($_POST['lic_info'])) && (!empty($_POST
 									<?php
 									$x = 0;
 									for ($i = 0; $i < 1000; $i += $x) {
+										$selected = '';
 										if ($i == $lic_machines) {
 											$selected = ' selected';
-										} else {
-											$selected = '';
 										}
 										
 										print '<option value="' . $i . '"' . $selected . '>' . $i .'</option>';
 										
-										if ($i <10) {
+										if ($i < 10) {
 											$i++;
-										} else {
-											if ($i <100) {
+										}
+										
+										if ($i >= 10) {
+											$x = 50;
+											if ($i < 100) {
 												$x = 5;
-											} else {
-												$x = 50;
 											}
 										}
 									}
 									
+									$selected = '';
 									if ($lic_machines == -1) {
 										$selected = ' selected';
-									} else {
-										$selected = '';
 									}
 									?><option value="-1"<?php print $selected;?>>unlimited</option>
 								</select>
@@ -316,158 +463,3 @@ if ((isset($_POST['lic_save'])) && (isset($_POST['lic_info'])) && (!empty($_POST
 		</div>
 	</body>
 </html>
-<?php
-
-
-
-//
-// Some functions and classes needed to provide functionality.
-//
-
-/**
- * Simply XOR encryption/decryption class
- * 
- * Encrypted strings will get base64 encoded in order to not break stuff.
- * 
- * Uses random initialization vector.
- * 
- */
-class xorCrypt {
-	private $password = NULL;
-
-	/**
-	 * Generates a random Initialization vector
-	 * 
-	 * @param integer $length
-	 * @return string $iv
-	 */
-	private function getRandomIV($length) {
-		$iv = '';
-		while($length-- > 0) {
-			$iv .= chr(mt_rand() & 0xff);
-		}
-		return $iv;
-	}// END: getRandomIV()
-	
-	
-	/**
-	 * Sets password to use for encryption/decryption
-	 * 
-	 * @param string $password
-	 */
-	public function setKey($password) {
-		$this->password = $password;
-	}// END: setKey()
-
-	
-	/**
-	 * Encrypts and encodes given payload and returns result.
-	 * 
-	 * @param string $plain_text
-	 * @param integer $iv_length - langth of IV
-	 * @return string $enc_text - base64 encoded and XOR encrypted payload
-	 */
-	public function encrypt($plain_text, $iv_length = 16) {
-		$plain_text .= "\x13";
-		$n = strlen($plain_text);
-		
-		if ($n % 16) {
-			$plain_text .= str_repeat("\0", 16 - ($n % 16));
-			$i = 0;
-			$enc_text = $this->getRandomIV($iv_length);
-			$iv = substr($this->password ^ $enc_text, 0, 512);
-			
-			while ($i < $n) {
-				$block = substr($plain_text, $i, 16) ^ pack('H*', sha1($iv));
-				$enc_text .= $block;
-				$iv = substr($block . $iv, 0, 512) ^ $this->password;
-				$i += 16;
-			}
-			
-			return base64_encode($enc_text);
-		}
-	}// END: encrypt()
-
-	/**
-	 * Decodes and decrypts given payload and returns result.
-	 * 
-	 * @param string $enc_text - base64 encoded and XOR encrypted payload
-	 * @param integer $iv_length - length of IV
-	 * @return string $plain_text - decrypted and decoded
-	 */
-	public function decrypt($enc_text, $iv_length = 16) {
-		$enc_text = base64_decode($enc_text);
-		$n = strlen($enc_text);
-		$i = $iv_length;
-		$plain_text = '';
-		$iv = substr($this->password ^ substr($enc_text, 0, $iv_length), 0, 512);
-		
-		while ($i < $n) {
-			$block = substr($enc_text, $i, 16);
-			$plain_text .= $block ^ pack('H*', sha1($iv));
-			$iv = substr($block . $iv, 0, 512) ^ $this->password;
-			$i += 16;
-		}
-		
-		return stripslashes(preg_replace('/\\x13\\x00*$/', '', $plain_text));
-	}// END: decrypt()
-}// END: xorCrypt()
-
-
-/**
- * Generate a random UUID.
- * 
- * @return string $uuid
- */
-function uuid() {
-	// The field names refer to RFC 4122 section 4.1.2
-	$uuid = sprintf('%04x%04x-%04x-%03x4-%04x-%04x%04x%04x',
-			mt_rand(0, 65535), mt_rand(0, 65535), // 32 bits for "time_low"
-			mt_rand(0, 65535), // 16 bits for "time_mid"
-			mt_rand(0, 4095),  // 12 bits before the 0100 of (version) 4 for "time_hi_and_version"
-			bindec(substr_replace(sprintf('%016b', mt_rand(0, 65535)), '01', 6, 2)),
-			// 8 bits, the last two of which (positions 6 and 7) are 01, for "clk_seq_hi_res"
-			// (hence, the 2nd hex digit after the 3rd hyphen can only be 1, 5, 9 or d)
-			// 8 bits for "clk_seq_low"
-			mt_rand(0, 65535), mt_rand(0, 65535), mt_rand(0, 65535) // 48 bits for "node"
-	);
-	
-	return strtoupper($uuid);
-}// END: uuid()
-
-
-/**
- * Checks if an encrypted payload contains valid license information.
- * 
- * @param string $lines
- * @return array $license
- */
-function checkLicense($lines) {
-	global $xorCrypt;
-
-	$license = array('info'=>'', 'guid'=>'', 'type'=>'', 'num'=>'');
-
-	if (isset($lines) && !empty($lines)) {
-		if(count($lines) == 4) {
-			$license['info'] = $lines[0];
-			$license['guid'] = $lines[1];
-			$license['type'] = $lines[2];
-			$license['num']  = $lines[3];
-		}
-	}
-
-	if ($license['info'] != '' && $license['guid'] != '' && $license['type'] != '' && $license['num'] != '') {
-		$license['info'] = $xorCrypt->decrypt($license['info']);
-		$license['guid'] = $xorCrypt->decrypt($license['guid']);
-		$license['type'] = $xorCrypt->decrypt($license['type']);
-		$license['num']  = $xorCrypt->decrypt($license['num']);
-	} else {
-		$license['info'] = '';
-		$license['guid'] = '';
-		$license['type'] = '0';
-		$license['num']  = '0';
-	}
-	
-	return $license;
-}// END: checkLicense()
-?>
