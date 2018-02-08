@@ -250,7 +250,11 @@ if (isset($_POST['lic_do']) && isset($_POST['lic_txt']) && !empty($_POST['lic_tx
 if ((isset($_POST['lic_save'])) && (isset($_POST['lic_info'])) && (!empty($_POST['lic_info']))) {
 	$lic_info = $_POST['lic_info'];
 
-	$local_file = '/tmp/' . md5(gmdate('D, d M Y H:i:s', time() + 24 * 60 * 60) . ' GMT') . '.lic';
+	// Proper way to determine the temporary files folder. Requires at least PHP 5.3 to work.
+	$upload_tmp_dir = ini_get('upload_tmp_dir') ?: sys_get_temp_dir();
+	
+	$local_file = $upload_tmp_dir . DIRECTORY_SEPARATOR . md5(gmdate('D, d M Y H:i:s', time() + 24 * 60 * 60) . ' GMT') . '.lic';
+	
 	$download_file = 'acme.lic';
 	$fp = fopen($local_file, 'w');
 	
