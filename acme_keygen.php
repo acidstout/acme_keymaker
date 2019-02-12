@@ -175,7 +175,66 @@ function checkLicense($xorCrypt, $lines) {
 	}
 	
 	return $license;
-}// END: checkLicense()
+}
+
+
+/**
+ * Prepares HTML option-tags for number of licensed devices select-box.
+ * 
+ * @return string
+ */
+function generateMachineLicenseOptions($lic_machines) {
+	$machine_licenses = '';
+	$x = 0;
+	
+	for ($i = 0; $i < 1000; $i += $x) {
+		$selected = '';
+		if ($i == $lic_machines) {
+			$selected = ' selected';
+		}
+		
+		$machine_licenses .= '<option value="' . $i . '"' . $selected . '>' . $i .'</option>';
+		
+		if ($i < 10) {
+			$i++;
+		}
+		
+		if ($i >= 10) {
+			$x = 50;
+			if ($i < 100) {
+				$x = 5;
+			}
+		}
+	}
+
+	$selected = '';
+	if ($lic_machines == -1) {
+		$selected = ' selected';
+	}
+	
+	$machine_licenses .= '<option value="-1"' . $selected . '>unlimited</option>';
+	
+	return $machine_licenses;
+}
+
+
+/**
+ * Prepares HTML option-tags for license types.
+ */
+function generateLicenseTypes($lic_type_txt, $lic_type) {
+	$license_types = '';
+	foreach ($lic_type_txt as $key => $value) {
+		$selected = '';
+		
+		if ($key == $lic_type) {
+			$selected = ' selected';
+		}
+
+		$license_types .= '<option value="' . $key . '"' . $selected . '>' . $value . '</option>';
+	}
+
+	return $license_types;
+}
 
 
 // Create a new XOR object with the key "Secret".
@@ -272,7 +331,7 @@ if ((isset($_POST['lic_save'])) && (isset($_POST['lic_info'])) && (!empty($_POST
 		$file = fopen($local_file, 'r');
 		
 		while (!feof($file)) {
-			print fread($file, filesize($local_file));
+			echo fread($file, filesize($local_file));
 			flush();
 			sleep(1);
 		}
@@ -286,6 +345,28 @@ if ((isset($_POST['lic_save'])) && (isset($_POST['lic_info'])) && (!empty($_POST
 }
 
 
+// Generate select-box options.
+$machine_licenses = generateMachineLicenseOptions($lic_machines);
+$license_types = generateLicenseTypes($lic_type_txt, $lic_type);
+
+
+// Prepare license information.
+$license_information = '';
+if (!empty($enc_lic_txt) && !empty($enc_lic_num) && !empty($enc_lic_type) && !empty($enc_lic_machines)) {
+	$license_information =  $enc_lic_txt . $lic_sep . $enc_lic_num . $lic_sep . $enc_lic_type . $lic_sep . $enc_lic_machines;
+} else {
+	if (isset($lic_info)) {
+		$license_information = $lic_info;
+	}
+}
+
+
+// Decide if we need to check the "[] Random?" checkbox.
+$license_random_number_checked = '';
+if ($lic_num_random === true) {
+	$license_random_number_checked = 'checked';
+}
+
 
 //
 // HTML template
@@ -294,7 +375,7 @@ if ((isset($_POST['lic_save'])) && (isset($_POST['lic_info'])) && (!empty($_POST
 <html>
 	<head>
 		<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
-		<title><?php print $prod_title;?></title>
+		<title><?php echo $prod_title;?></title>
 		<style type="text/css">
 			/* START: reset style */
 			html, body, div, span, applet, object, iframe,
@@ -310,153 +391,202 @@ if ((isset($_POST['lic_save'])) && (isset($_POST['lic_info'])) && (!empty($_POST
 			figure, figcaption, footer, header, hgroup, 
 			menu, nav, output, ruby, section, summary,
 			time, mark, audio, video {
+				border: 0;
+				font-size: 100%;
+				font: inherit;
 				margin: 0;
 				padding: 0;
-				border: 0;
-				font-size: 0.5em;
-				font: inherit;
 				vertical-align: baseline;
 			}
-			
-			td {
-				vertical-align: middle;
-				font-size: 0.5em;
-				text-shadow: 1px 1px 10px #888;
-			}
+
 			/* HTML5 display-role reset for older browsers */
 			article, aside, details, figcaption, figure, 
 			footer, header, hgroup, menu, nav, section {
 				display: block;
 			}
+
 			body {
-				line-height: 16px;
+				line-height: 14pt;
 			}
+
 			ol, ul {
 				list-style: none;
 			}
+
 			blockquote, q {
 				quotes: none;
 			}
-			blockquote:before, blockquote:after,
-			q:before, q:after {
-				content: '';
-				content: none;
-			}
+
+				blockquote:before,
+				blockquote:after,
+				q:before,
+				q:after {
+					content: '';
+					content: none;
+				}
+
 			table {
 				border-spacing: 0;
 			}
-			/* END: reset style */
-			
+
+				td {
+					vertical-align: middle;
+				}
+
+
 			/* START: keymaker style */
-			* { font-family:sans-serif !important; font-size: 1em; text-overflow: ellipsis; }
-			body { background:#555; }
-			button { width:116px; height:28px; cursor:pointer; }
-			button[disabled] { cursor:default; }
-			select { cursor:pointer; width:210px; }
-			input[type=checkbox] { cursor:pointer; position:relative; top:2px; margin-right: 5px; }
-			label { cursor:pointer; }
-			table tr { height:24px; }
-			textarea { font-family:sans-serif; font-size:0.5em; line-height:1.3em; padding:3px; margin:0; resize:none; }
+			body {
+				background-color: #555;
+				font-family: 'Segoe UI', sans-serif;
+			}
+
+			button, input[type=checkbox], label, select {
+				cursor: pointer;
+				font-family: 'Segoe UI', sans-serif;
+			}
+
+				button {
+					font-family: 'Segoe UI', sans-serif;
+					font-weight: 600;
+					height: 28px;
+					width: 116px;
+				}
+
+					button[disabled] {
+						cursor: default;
+					}
+
+				input[type=checkbox] {
+					margin-right: 5px;
+					position: relative;
+					top: 2px;
+				}
+
+				label {
+					font-size: 8pt;
+				}
+
+				select {
+					text-align: left;
+					width: 210px;
+				}
+
+			input[type="text"] {
+				font-family: 'Consolas', monospace;
+				padding: 0 3px;
+				text-align: center;
+				width: 385px;
+			}
+
+			textarea {
+				font-size: 10pt;
+				height: 150px;
+				line-height: 14pt;
+				margin: 0;
+				padding: 3px;
+				resize: none;
+			}
+
+				textarea[name="lic_txt"] {
+					font-family: 'Segoe UI', sans-serif;
+					text-align: center;
+					width: 300px;
+				}
+
+				textarea[name="lic_info"] {
+					font-family: 'Consolas', monospace;
+					width: 470px;
+				}
+
+
+			table tr {
+				height: 24px;
+			}
+
+				table tr td:first-child {
+					overflow: hidden;
+					text-overflow: ellipsis;
+					width: 98px;
+				}
+
+				
 			/* classes */
-			.rightmargin { margin: 6px 16px 0 0; }
-			.lic { width:300px; height:100px; min-width:300px; min-height:100px; max-width:300px; max-height:100px; text-align:center; }
-			.mono { margin:0 0 0 8px; width:460px; height:100px; min-width:460px; min-height:100px; max-width:460px; max-height:100px; font-family:monospace; font-size:0.5em; }
-			.alignleft { text-align:left; }
-			.alignright { text-align:right; }
-			.floatleft { float:left; }
-			.floatright { float:right; }
-			.clear { clear:both; }
+			.floatleft {
+				float: left;
+			}
+
+			.floatright {
+				float: right;
+			}
+
+			.clear {
+				clear: both;
+			}
+
+
 			/* ids */
-			#box { position:absolute; top:50%; left:50%; margin-top:-150px; margin-left:-400px;width:820px; height:175px; padding:15px 15px 25px 15px; background:#ccc; border:1px solid #777; border-radius: 12px; font-size:0.5em; }
-			#lic_num { font-family:monospace; font-size:0.5em; width:385px; padding:0 3px; text-align:center; }
-			#header { position:relative; top:-2px; padding:0 0 8px 2px; font-size: 2.4em; font-weight:bold; text-shadow: 1px 1px 5px #888; }
-			#about { position:absolute; top:10px; right:15px; text-align:right; color:#888;  line-height:1.2em; cursor:default; text-shadow: 1px 1px 5px #aaa; }
-			#about a { color:#888 !important; }
-			/* END: keymaker style */
+			#box {
+				background-color: #ccc;
+				border: 1px solid #777;
+				border-radius: 12px;
+				padding: 15px 15px 25px 15px;
+				position: absolute;
+				top: 50%;
+				left: 50%;
+				transform: translate(-50%,-50%);
+				height: 220px;
+				width: 820px;
+			}
+
+				#header {
+					font-size: 16pt;
+					font-weight: bold;
+					padding: 0 0 8px 2px;
+					position: relative;
+					top: -2px;
+					text-shadow: 0 0 4px #aaa;
+				}
+
+				#about {
+					color: #555;
+					cursor: default;
+					font-size: 7pt;
+					line-height: 8pt;
+					position: absolute;
+					top: 10px;
+					right: 15px;
+					text-align: right;
+					text-shadow: 0 0 2px #aaa;
+				}
+
+					#about a {
+						color: #555 !important;
+					}
 		</style>
 	</head>
 	<body>
 		<div id="box">
-			<div id="header"><?php print $prod_title;?></div>
-			<div id="about"><?php print $prod_about;?><br/><a href="<?php print $prod_link;?>" target="_blank"><?php print parse_url($prod_link, PHP_URL_HOST);?></a></div>
+			<div id="header"><?php echo $prod_title;?></div>
+			<div id="about"><?php echo $prod_about;?><br/><a href="<?php echo $prod_link;?>" target="_blank"><?php echo parse_url($prod_link, PHP_URL_HOST);?></a></div>
 			<form action="#" method="post">
-				<textarea autofocus class="floatleft lic" name="lic_txt" placeholder="Enter licensee ..."><?php print $lic_txt;?></textarea>
-				<textarea class="floatright mono" name="lic_info" placeholder="No license information created, yet. Paste an existing license into this box and click Check to show the licensee."><?php
-					if (!empty($enc_lic_txt) && !empty($enc_lic_num) && !empty($enc_lic_type) && !empty($enc_lic_machines)) {
-						print $enc_lic_txt . $lic_sep . $enc_lic_num . $lic_sep . $enc_lic_type . $lic_sep . $enc_lic_machines;
-					} else {
-						if (isset($lic_info)) {
-							print $lic_info;
-						}
-					}
-				?></textarea>
+				<textarea autofocus class="floatleft" name="lic_txt" placeholder="Enter licensee ..."><?php echo $lic_txt;?></textarea>
+				<textarea class="floatright" name="lic_info" placeholder="No license information created, yet. Paste an existing license into this box and click Check to show the licensee."><?php echo $license_information;?></textarea>
 				<br class="clear"/>
-				<div class="floatleft rightmargin">
+				<div class="floatleft">
 					<table>
 						<tr>
-							<td>License type:</td>
+							<td><label for="lic_type">License type:</label></td>
+							<td><select id="lic_type" name="lic_type" title="Type of license."><?php echo $license_types;?></select></td>
 						</tr>
 						<tr>
-							<td>Licensed devices:</td>
-						</tr>
-					</table>
-				</div>
-				<div class="floatleft rightmargin">
-					<table>
-						<tr>
-							<td>
-								<select name="lic_type" class="alignleft" title="Type of license.">
-								<?php
-								foreach ($lic_type_txt as $key => $value) {
-									$selected = '';
-									
-									if ($key == $lic_type) {
-										$selected = ' selected';
-									}
-
-									print '<option value="' . $key . '"' . $selected . '>' . $value . '</option>';
-								}?>
-								</select>
-							</td>
-						</tr>
-						<tr>
-							<td>
-								<select name="lic_machines" class="alignleft" title="Number of licensed machines.">
-									<?php
-									$x = 0;
-									for ($i = 0; $i < 1000; $i += $x) {
-										$selected = '';
-										if ($i == $lic_machines) {
-											$selected = ' selected';
-										}
-										
-										print '<option value="' . $i . '"' . $selected . '>' . $i .'</option>';
-										
-										if ($i < 10) {
-											$i++;
-										}
-										
-										if ($i >= 10) {
-											$x = 50;
-											if ($i < 100) {
-												$x = 5;
-											}
-										}
-									}
-									
-									$selected = '';
-									if ($lic_machines == -1) {
-										$selected = ' selected';
-									}
-									?><option value="-1"<?php print $selected;?>>unlimited</option>
-								</select>
-							</td>
+							<td><label for="lic_machines">Licensed devices:</label></td>
+							<td><select id="lic_machines" name="lic_machines" title="Number of licensed machines."><?php echo $machine_licenses;?></select></td>
 						</tr>
 					</table>
 				</div>
 				<div class="floatright">
-					<input type="text" id="lic_num" name="lic_num" value="<?php print $lic_num;?>" placeholder="No license number"/>
-					<span  title="Generate a random license number instead of a unique one from the license information."><input type="checkbox" id="lic_num_random" name="lic_num_random" <?php if ($lic_num_random) { print 'checked'; }?>/><label for="lic_num_random">Random?</label></span>
+					<input type="text" name="lic_num" value="<?php echo $lic_num;?>" placeholder="No license number"/>
+					<span  title="Generate a random license number instead of a unique one from the license information."><input type="checkbox" id="lic_num_random" name="lic_num_random" <?php echo $license_random_number_checked;?>/><label for="lic_num_random">Random?</label></span>
 					<br/>
 					<button type="reset" name="reset" title="Undo any changes.">Reset</button>
 					<button type="submit" name="lic_re" title="Check if encrypted license information is valid.">Check</button>
